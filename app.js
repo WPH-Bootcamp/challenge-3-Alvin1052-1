@@ -1,6 +1,7 @@
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const { isStringObject } = require('util/types');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -42,8 +43,9 @@ function displayMenu() {
   console.log('==================================================');
 }
 async function HandleMenu(tracker) {
-  displayMenu();
+  tracker.setReminder();
 
+  displayMenu();
   const choice = await askQuestion('Pilih menu: ');
   switch (choice) {
     //Display Profile
@@ -65,7 +67,14 @@ async function HandleMenu(tracker) {
     //Display Add Habit
     case '5':
       const name = await askQuestion('Nama kebiasaan: ');
-      const freqInput = await askQuestion('Target per minggu: ');
+
+      let freqInput;
+      do {
+        freqInput = await askQuestion('Target per minggu: ');
+      } while (isNaN(freqInput) === true || freqInput < 1 || freqInput === '');
+
+      // const freqInput = await askQuestion('Target per minggu: ');
+
       const frequency = parseInt(freqInput) ?? 1; // Nullish coalescing if parse fails (bonus usage)
       tracker.addHabit(name, frequency);
       break;
@@ -79,7 +88,6 @@ async function HandleMenu(tracker) {
       const haveActive = tracker.habits.some(
         (habit) => habit.finished === false
       );
-      console.log('have Active', haveActive);
 
       if (!haveActive) {
         console.log('dont have aktif Habits');
@@ -140,7 +148,15 @@ async function Profile() {
 
   const nama =
     data.userProfile.name ?? (await askQuestion('What is your name? '));
-  const age = data.userProfile.age ?? (await askQuestion('What is your age? '));
+
+  let age = data.userProfile.age;
+
+  if (!age) {
+    do {
+      age = await askQuestion('How Old Are You ? ');
+    } while (isNaN(age) === true || age === '');
+  }
+
   const kelas =
     data.userProfile.kelas ?? (await askQuestion('What is your Class? '));
   const joinDate = data.userProfile.joinDate
@@ -148,9 +164,7 @@ async function Profile() {
     : new Date();
 
   const tracker = new HabitTracker(nama, age, kelas, joinDate, loadedhabits);
-  if (tracker.habits.length > 0) {
-    tracker.setReminder();
-  }
+
   tracker.saveToFile();
   HandleMenu(tracker);
 }
@@ -164,6 +178,7 @@ class HabitTracker {
       joinDate: joinDate ?? new Date(),
     };
     this.habits = habits ?? [];
+    this.reminderStatus = false;
   }
 
   addHabit(name, targetFrequency) {
@@ -185,6 +200,7 @@ class HabitTracker {
     console.log(`TANGGAL: ${new Date(this.profile.joinDate).toDateString()}`);
     console.log('==================================================');
   }
+
   displayHabits(filter = null) {
     let habitToDisplay = this.habits;
 
@@ -259,6 +275,12 @@ class HabitTracker {
   }
 
   setReminder() {
+    if (
+      this.reminderStatus ||
+      this.habits.filter((habit) => !habit.finished).length === 0
+    )
+      return;
+    this.reminderStatus = true;
     setInterval(() => {
       this.habits.forEach((habit) => {
         if (habit.finished === false) {
@@ -297,15 +319,29 @@ class HabitTracker {
     this.saveToFile();
   }
   demoLoop() {
-    console.log('========== List Habit with For ==========');
-    for (let i = 0; i < this.habits.length; i++) {
-      console.log(this.habits[i].name);
+    const activeHabits = this.habits.filter((habit) => !habit.finished);
+    const doneHabits = this.habits.filter((habit) => habit.finished);
+    if (!activeHabits.length && !doneHabits.length) {
+      console.log('do not have any habits.');
+      return;
+    }
+
+    console.log('========== List Active Habit with For ==========');
+
+    if (activeHabits.length === 0) {
+      console.log('do not have any active habits.');
+    }
+    for (let i = 0; i < activeHabits.length; i++) {
+      console.log(activeHabits[i].name);
     }
 
     console.log('========== List Habit  with While ==========');
+    if (doneHabits.length === 0) {
+      console.log('do not have any done habits.');
+    }
     let i = 0;
-    while (i < this.habits.length) {
-      console.log(this.habits[i].name);
+    while (i < doneHabits.length) {
+      console.log(doneHabits[i].name);
       i++;
     }
   }
